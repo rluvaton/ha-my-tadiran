@@ -9,7 +9,8 @@ Each AC is exposed as a `climate` entity supporting:
 - target temperature (16–30°C)
 - current temperature
 - fan speed: low / medium / high / auto
-- swing: vertical / horizontal / both / off
+
+Swing controls are not exposed — the API has `swing_ud` / `swing_lr` fields but they're phantoms on Tadiran AC models without physical louver motors, and the My Tadiran app hides them too.
 
 ## Requirements
 

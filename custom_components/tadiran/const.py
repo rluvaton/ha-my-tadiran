@@ -7,10 +7,6 @@ from homeassistant.components.climate import (
     FAN_LOW,
     FAN_MEDIUM,
     HVACMode,
-    SWING_BOTH,
-    SWING_HORIZONTAL,
-    SWING_OFF,
-    SWING_VERTICAL,
 )
 
 DOMAIN = "tadiran"
@@ -48,9 +44,6 @@ WIND_TO_FAN: dict[str, str] = {
     "AUTO": FAN_AUTO,
 }
 FAN_TO_WIND: dict[str, str] = {v: k for k, v in WIND_TO_FAN.items()}
-
-# HA swing modes
-SWING_MODES = [SWING_OFF, SWING_VERTICAL, SWING_HORIZONTAL, SWING_BOTH]
 
 TEMP_MIN = 16
 TEMP_MAX = 30

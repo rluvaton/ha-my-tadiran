@@ -7,10 +7,6 @@ from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
-    SWING_BOTH,
-    SWING_HORIZONTAL,
-    SWING_OFF,
-    SWING_VERTICAL,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -24,7 +20,6 @@ from .const import (
     FAN_TO_WIND,
     HVAC_TO_MODE,
     MODE_TO_HVAC,
-    SWING_MODES,
     TEMP_MAX,
     TEMP_MIN,
     WIND_TO_FAN,
@@ -46,16 +41,6 @@ async def async_setup_entry(
     async_add_entities(
         TadiranClimate(coordinator, device_id) for device_id in coordinator.data
     )
-
-
-def _swing_from_flags(ud: bool, lr: bool) -> str:
-    if ud and lr:
-        return SWING_BOTH
-    if ud:
-        return SWING_VERTICAL
-    if lr:
-        return SWING_HORIZONTAL
-    return SWING_OFF
 
 
 def _normalize_temp(value: Any) -> float | None:
@@ -91,11 +76,9 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         HVACMode.HEAT_COOL,
     ]
     _attr_fan_modes = list(WIND_TO_FAN.values())
-    _attr_swing_modes = SWING_MODES
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.FAN_MODE
-        | ClimateEntityFeature.SWING_MODE
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
@@ -155,13 +138,6 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
     def fan_mode(self) -> str | None:
         return WIND_TO_FAN.get(self._config.get("wind_speed", "").upper())
 
-    @property
-    def swing_mode(self) -> str:
-        return _swing_from_flags(
-            bool(self._config.get("swing_ud")),
-            bool(self._config.get("swing_lr")),
-        )
-
     # ---- Commands ----
 
     async def _send(self, updates: dict[str, Any]) -> None:
@@ -190,11 +166,6 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         if wind is None:
             return
         await self._send({"wind_speed": wind})
-
-    async def async_set_swing_mode(self, swing_mode: str) -> None:
-        ud = swing_mode in (SWING_VERTICAL, SWING_BOTH)
-        lr = swing_mode in (SWING_HORIZONTAL, SWING_BOTH)
-        await self._send({"swing_ud": ud, "swing_lr": lr})
 
     async def async_turn_on(self) -> None:
         await self._send({"power": True})
