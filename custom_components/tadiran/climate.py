@@ -1,7 +1,7 @@
 """Tadiran AC climate platform."""
 from __future__ import annotations
 
-import asyncio
+import time
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -31,6 +31,11 @@ from .const import (
     WIND_TO_FAN,
 )
 from .coordinator import TadiranCoordinator
+
+# Window for masking polled state that disagrees with a just-issued command.
+# The Tadiran cloud shadow can lag 10-15s behind a successful PUT, so without
+# this mask the UI flickers: optimistic -> stale poll -> real state.
+_PENDING_WINDOW_SECONDS = 30
 
 
 async def async_setup_entry(
@@ -98,6 +103,8 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         super().__init__(coordinator)
         self._device_id = device_id
         self._attr_unique_id = device_id
+        # field name -> (commanded value, monotonic deadline)
+        self._pending: dict[str, tuple[Any, float]] = {}
 
         dev = self._device
         self._attr_device_info = DeviceInfo(
@@ -113,7 +120,13 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
 
     @property
     def _config(self) -> dict[str, Any]:
-        return self._device.get("configurations", {}) or {}
+        base = self._device.get("configurations", {}) or {}
+        if not self._pending:
+            return base
+        merged = dict(base)
+        for key, (value, _deadline) in self._pending.items():
+            merged[key] = value
+        return merged
 
     @property
     def available(self) -> bool:
@@ -150,16 +163,10 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
 
     async def _send(self, updates: dict[str, Any]) -> None:
         await self.coordinator.api.update_device_shadow(self._device_id, updates)
-        # The cloud shadow lags ~1-2s behind a successful command. Update local
-        # state optimistically so the UI flips immediately, then schedule a
-        # reconciling poll a few seconds later.
-        self._config.update(updates)
+        deadline = time.monotonic() + _PENDING_WINDOW_SECONDS
+        for key, value in updates.items():
+            self._pending[key] = (value, deadline)
         self.async_write_ha_state()
-        self.hass.async_create_task(self._delayed_refresh())
-
-    async def _delayed_refresh(self) -> None:
-        await asyncio.sleep(3)
-        await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
@@ -195,4 +202,13 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        # Drop pending overrides that the cloud has now confirmed or that
+        # timed out without confirmation.
+        if self._pending:
+            base = self._device.get("configurations", {}) or {}
+            now = time.monotonic()
+            for key in list(self._pending):
+                value, deadline = self._pending[key]
+                if now >= deadline or base.get(key) == value:
+                    del self._pending[key]
         self.async_write_ha_state()
