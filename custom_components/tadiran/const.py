@@ -47,3 +47,13 @@ FAN_TO_WIND: dict[str, str] = {v: k for k, v in WIND_TO_FAN.items()}
 
 TEMP_MIN = 16
 TEMP_MAX = 30
+
+# AC model_ids the integration has been verified against. Any device whose
+# model_id is not in this set still loads, but we fire a persistent notification
+# in HA asking the user to report it so the whitelist can be extended.
+# Open a PR to add new entries.
+KNOWN_TESTED_MODELS: frozenset[str] = frozenset(
+    {
+        "hyfpizc9xabvyyl3",  # Ducted inverter
+    }
+)
