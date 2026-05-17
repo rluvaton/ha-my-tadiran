@@ -14,6 +14,29 @@ from .const import CONF_REFRESH_TOKEN, DEFAULT_SCAN_INTERVAL_SECONDS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+# The Tadiran API serializes some booleans as real JSON bool and others as
+# the strings "true"/"false". Coerce these fields at ingestion so downstream
+# code can assume Python bool.
+_BOOL_FIELDS = frozenset(
+    {"power", "online", "light", "turbo", "mute", "swing_ud", "swing_lr"}
+)
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    return bool(value)
+
+
+def _normalize_configurations(cfg: dict[str, Any]) -> dict[str, Any]:
+    out = dict(cfg)
+    for field in _BOOL_FIELDS:
+        if field in out:
+            out[field] = _coerce_bool(out[field])
+    return out
+
 
 class TadiranCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Polls Tadiran for all devices; exposes them keyed by device_id."""
@@ -48,4 +71,12 @@ class TadiranCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 data={**self.entry.data, CONF_REFRESH_TOKEN: self.api.refresh_token},
             )
 
-        return {d["device_id"]: d for d in devices}
+        result: dict[str, dict[str, Any]] = {}
+        for device in devices:
+            normalized = dict(device)
+            if "configurations" in normalized:
+                normalized["configurations"] = _normalize_configurations(
+                    normalized["configurations"]
+                )
+            result[device["device_id"]] = normalized
+        return result
