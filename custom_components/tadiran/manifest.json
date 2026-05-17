@@ -1,0 +1,12 @@
+{
+  "domain": "tadiran",
+  "name": "Tadiran AC",
+  "version": "0.1.0",
+  "documentation": "https://github.com/rluvaton/ha-my-tadiran",
+  "issue_tracker": "https://github.com/rluvaton/ha-my-tadiran/issues",
+  "codeowners": ["@rluvaton"],
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "integration_type": "hub",
+  "requirements": []
+}

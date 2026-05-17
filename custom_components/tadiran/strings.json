@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tadiran AC",
+        "description": "Enter the phone number registered with your My Tadiran account. You'll receive an SMS code in the next step.",
+        "data": {
+          "phone": "Phone number (with country code, e.g. +972XXXXXXXXX)"
+        }
+      },
+      "otp": {
+        "title": "Verify SMS code",
+        "description": "Enter the verification code sent to {phone}.",
+        "data": {
+          "otp": "SMS code"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Tadiran",
+        "description": "Your session expired. A new SMS code will be sent to {phone}. Continue?"
+      }
+    },
+    "error": {
+      "invalid_phone": "Phone number must start with + and the country code.",
+      "invalid_otp": "Wrong or expired SMS code.",
+      "cannot_connect": "Could not reach Tadiran/Cognito."
+    },
+    "abort": {
+      "already_configured": "This phone number is already configured."
+    }
+  }
+}
