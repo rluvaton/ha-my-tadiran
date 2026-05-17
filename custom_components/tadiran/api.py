@@ -177,7 +177,7 @@ class TadiranAPI:
         method: str,
         path: str,
         *,
-        json_body: dict | None = None,
+        json_body: Any = None,
         extra_headers: dict[str, str] | None = None,
     ) -> Any:
         # Proactively refresh if id_token is near expiry (within 60s).
@@ -217,10 +217,12 @@ class TadiranAPI:
     async def update_device_shadow(
         self, device_id: str, updates: dict[str, Any]
     ) -> Any:
+        # API expects a list of {name, value} pairs, not a flat dict.
+        body = [{"name": k, "value": v} for k, v in updates.items()]
         return await self._request(
             "PUT",
             f"/mobile-app/api/v1/devices/{device_id}/shadow/update/",
-            json_body=updates,
+            json_body=body,
             extra_headers={
                 "x-manufacturer-name": "TUYA",
                 "Content-Type": "application/json",
