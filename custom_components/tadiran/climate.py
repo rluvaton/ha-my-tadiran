@@ -1,6 +1,7 @@
 """Tadiran AC climate platform."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -149,6 +150,15 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
 
     async def _send(self, updates: dict[str, Any]) -> None:
         await self.coordinator.api.update_device_shadow(self._device_id, updates)
+        # The cloud shadow lags ~1-2s behind a successful command. Update local
+        # state optimistically so the UI flips immediately, then schedule a
+        # reconciling poll a few seconds later.
+        self._config.update(updates)
+        self.async_write_ha_state()
+        self.hass.async_create_task(self._delayed_refresh())
+
+    async def _delayed_refresh(self) -> None:
+        await asyncio.sleep(3)
         await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
