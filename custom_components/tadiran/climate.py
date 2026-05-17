@@ -1,6 +1,7 @@
 """Tadiran AC climate platform."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -32,6 +33,13 @@ from .coordinator import TadiranCoordinator
 # avoiding mid-window dead zones where the UI flips to a stale polled value.
 # With the default 30s poll interval, 3 = up to ~90s of cloud-shadow lag.
 _PENDING_MAX_DISAGREEMENTS = 3
+
+# When the user changes multiple controls in HA in quick succession (e.g.
+# temp + fan together), each fires a separate service call. Coalesce all
+# changes that arrive within this window into a single PUT — the Tadiran
+# cloud can lose one of two PUTs sent back-to-back, but accepts a single
+# multi-item body atomically.
+_BATCH_WINDOW_SECONDS = 0.2
 
 
 async def async_setup_entry(
@@ -91,6 +99,9 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         # disagreed with us). Cleared when cloud agrees or count exceeds
         # _PENDING_MAX_DISAGREEMENTS.
         self._pending: dict[str, tuple[Any, int]] = {}
+        # Accumulator for the debounced batch PUT.
+        self._batch_buffer: dict[str, Any] = {}
+        self._batch_task: asyncio.Task | None = None
 
         dev = self._device
         self._attr_device_info = DeviceInfo(
@@ -141,10 +152,22 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
     # ---- Commands ----
 
     async def _send(self, updates: dict[str, Any]) -> None:
-        await self.coordinator.api.update_device_shadow(self._device_id, updates)
+        # Optimistic state goes to _pending immediately so the UI is responsive
+        # even though the actual PUT is debounced.
         for key, value in updates.items():
             self._pending[key] = (value, 0)
+            self._batch_buffer[key] = value
         self.async_write_ha_state()
+        if self._batch_task is None or self._batch_task.done():
+            self._batch_task = self.hass.async_create_task(self._flush_batch())
+
+    async def _flush_batch(self) -> None:
+        await asyncio.sleep(_BATCH_WINDOW_SECONDS)
+        to_send = self._batch_buffer
+        self._batch_buffer = {}
+        if not to_send:
+            return
+        await self.coordinator.api.update_device_shadow(self._device_id, to_send)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
