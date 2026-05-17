@@ -48,6 +48,13 @@ After setup, the integration keeps itself authenticated via the Cognito refresh 
 - SMS OTP is the only initial auth path. If Cognito revokes your refresh token, you'll need to re-enter an SMS code.
 - Tested only against Israeli (`tenant-...`) accounts so far; EU tenants should work but are unverified.
 - LAN/local control is not implemented — the integration is cloud-only.
+- Target temperature is hidden in AUTO (heat/cool) mode — Tadiran ACs don't accept temp changes in that mode (the My Tadiran app hides the control there too).
+
+## Known quirks
+
+**The My Tadiran app may show old values for a while after changes from HA.** The Tadiran cloud shadow has two fields per property: `desired` (what was requested) and `reported` (what the device has acknowledged). Our integration updates `desired` and the device acts on it within seconds — you'll often hear the AC engine adjust immediately. But `reported` lags by anywhere from a few seconds to several minutes as it waits for the device's heartbeat to sync state back to the cloud. The mobile app appears to prefer `reported`, so it may keep showing the old value for a while. **Trust HA and the AC itself, not the app, when there's a mismatch.**
+
+**Cloud command propagation can take up to ~90 seconds.** When you change something in HA, the integration optimistically shows the new value immediately and masks the lagging cloud state for up to three poll cycles (~90s). If after that the cloud still doesn't reflect the change, HA snaps to the cloud's value — usually a sign the command was actually rejected, in which case you'll have seen a notification banner.
 
 ## License
 
