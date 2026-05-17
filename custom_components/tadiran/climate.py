@@ -12,6 +12,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -84,12 +85,6 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         HVACMode.HEAT_COOL,
     ]
     _attr_fan_modes = list(WIND_TO_FAN.values())
-    _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
-        | ClimateEntityFeature.FAN_MODE
-        | ClimateEntityFeature.TURN_ON
-        | ClimateEntityFeature.TURN_OFF
-    )
 
     def __init__(self, coordinator: TadiranCoordinator, device_id: str) -> None:
         super().__init__(coordinator)
@@ -149,6 +144,21 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         return MODE_TO_HVAC.get(self._config.get("mode", "").upper())
 
     @property
+    def supported_features(self) -> ClimateEntityFeature:
+        # Tadiran ACs don't let you set the target temperature when the mode
+        # is AUTO (heat_cool) — the My Tadiran app hides the control there
+        # too. Mirror that so the HA UI doesn't show a slider that would just
+        # 400 against the API (or be silently ignored).
+        features = (
+            ClimateEntityFeature.FAN_MODE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
+        )
+        if self.hvac_mode != HVACMode.HEAT_COOL:
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE
+        return features
+
+    @property
     def fan_mode(self) -> str | None:
         return WIND_TO_FAN.get(self._config.get("wind_speed", "").upper())
 
@@ -200,6 +210,11 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         await self._send({"power": True, "mode": mode_str})
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
+        if self.hvac_mode == HVACMode.HEAT_COOL:
+            raise ServiceValidationError(
+                "Cannot set target temperature while in AUTO mode; "
+                "switch to Cool, Heat, Dry, or Fan first."
+            )
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
             return
