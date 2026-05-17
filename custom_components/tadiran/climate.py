@@ -99,9 +99,12 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
         # disagreed with us). Cleared when cloud agrees or count exceeds
         # _PENDING_MAX_DISAGREEMENTS.
         self._pending: dict[str, tuple[Any, int]] = {}
-        # Accumulator for the debounced batch PUT.
+        # Debounce buffer: every caller within _BATCH_WINDOW_SECONDS adds its
+        # updates here, then awaits the shared flush task so it sees the PUT
+        # outcome (and any error) directly.
         self._batch_buffer: dict[str, Any] = {}
         self._batch_task: asyncio.Task | None = None
+        self._batch_lock = asyncio.Lock()
 
         dev = self._device
         self._attr_device_info = DeviceInfo(
@@ -152,19 +155,37 @@ class TadiranClimate(CoordinatorEntity[TadiranCoordinator], ClimateEntity):
     # ---- Commands ----
 
     async def _send(self, updates: dict[str, Any]) -> None:
-        # Optimistic state goes to _pending immediately so the UI is responsive
-        # even though the actual PUT is debounced.
-        for key, value in updates.items():
-            self._pending[key] = (value, 0)
-            self._batch_buffer[key] = value
+        # Add to the current batch and await the shared flush so any PUT
+        # failure surfaces back to this service call.
+        async with self._batch_lock:
+            for key, value in updates.items():
+                self._pending[key] = (value, 0)
+                self._batch_buffer[key] = value
+            if self._batch_task is None or self._batch_task.done():
+                self._batch_task = self.hass.async_create_task(self._flush_batch())
+            flush_task = self._batch_task
         self.async_write_ha_state()
-        if self._batch_task is None or self._batch_task.done():
-            self._batch_task = self.hass.async_create_task(self._flush_batch())
+
+        try:
+            await flush_task
+        except Exception:
+            # The PUT failed — roll back the optimistic overlay for the fields
+            # this call contributed, so HA stops claiming a change that didn't
+            # land.
+            for key in updates:
+                self._pending.pop(key, None)
+            self.async_write_ha_state()
+            raise
 
     async def _flush_batch(self) -> None:
         await asyncio.sleep(_BATCH_WINDOW_SECONDS)
-        to_send = self._batch_buffer
-        self._batch_buffer = {}
+        async with self._batch_lock:
+            to_send = self._batch_buffer
+            self._batch_buffer = {}
+            # Reset so any caller arriving after this point starts a fresh
+            # batch (and isn't silently dropped into a buffer we already
+            # flushed).
+            self._batch_task = None
         if not to_send:
             return
         await self.coordinator.api.update_device_shadow(self._device_id, to_send)
