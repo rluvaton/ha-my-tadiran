@@ -55,5 +55,8 @@ TEMP_MAX = 30
 KNOWN_TESTED_MODELS: frozenset[str] = frozenset(
     {
         "hyfpizc9xabvyyl3",  # Ducted inverter
+        "tadiran-slim-inv-g",  # Ducted slim (#3)
+        "alpha-pro-inv-ng",  # Alpha Pro Inverter 140NG / 180NG (#2)
+        "supreme-inv-ng-airow",  # Supreme Inverter 370NG (#1)
     }
 )

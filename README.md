@@ -45,7 +45,13 @@ After setup, the integration keeps itself authenticated via the Cognito refresh 
 
 ## Limitations
 
-- **Only tested on a Tadiran Ducted Inverter AC.** Other Tadiran model families (mini-split, cassette, portable, etc.) may use different mode strings, expose different shadow fields, or have hardware features this integration doesn't surface (e.g. swing). If you have a different model and it doesn't work, please open an issue with the output of `GET /tadiran-mobile-app/api/v1/devices/` and `GET /mobile-app/api/v1/devices/{id}/shadow/` so we can extend support.
+- **Only verified on a handful of models** (basic climate control — mode and target temperature):
+  - Ducted Inverter (`hyfpizc9xabvyyl3`)
+  - Ducted slim (`tadiran-slim-inv-g`)
+  - Alpha Pro Inverter 140NG / 180NG (`alpha-pro-inv-ng`)
+  - Supreme Inverter 370NG (`supreme-inv-ng-airow`)
+
+  Other Tadiran models may use different mode strings, expose different shadow fields, or have hardware features this integration doesn't surface yet (e.g. swing, light, turbo, mute). If you have a different model and it doesn't work, please open an issue with the output of `GET /tadiran-mobile-app/api/v1/devices/` and `GET /mobile-app/api/v1/devices/{id}/shadow/` so we can extend support.
 - SMS OTP is the only initial auth path. If Cognito revokes your refresh token, you'll need to re-enter an SMS code.
 - Tested only against Israeli (`tenant-...`) accounts so far; EU tenants should work but are unverified.
 - LAN/local control is not implemented — the integration is cloud-only.

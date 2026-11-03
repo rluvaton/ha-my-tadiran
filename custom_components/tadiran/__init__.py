@@ -68,9 +68,8 @@ def _warn_on_untested_models(
             (
                 f"The Tadiran AC **{name}** reports model "
                 f"`{model_id}` ({description}). "
-                "This integration has only been verified against a "
-                "Ducted Inverter AC; some controls may misbehave on "
-                "other models.\n\n"
+                "This model hasn't been verified with this integration "
+                "yet; some controls may misbehave.\n\n"
                 "Please [open an issue]"
                 "(https://github.com/rluvaton/ha-my-tadiran/issues) "
                 "with the model details so support can be extended."
